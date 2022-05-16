@@ -40,7 +40,7 @@ def apply_trait_model(hy_obj,args):
 
     with open(json_file, 'r') as json_obj:
         trait_model = json.load(json_obj)
-        coeffs = np.array(trait_model['model']['coefficients'])
+        coeffs = np.array(trait_model['model']['coefficients']).T
         intercept = np.array(trait_model['model']['intercepts'])
         model_waves = np.array(trait_model['wavelengths'])
 
@@ -95,7 +95,7 @@ def apply_trait_model(hy_obj,args):
                 mean = chunk.mean(axis=2)
                 chunk = chunk/mean[:,np.newaxis]
 
-        trait_pred = np.einsum('jk,lm->jl',chunk,coeffs, optimize='optimal')
+        trait_pred = np.dot(chunk,coeffs)
         trait_pred = trait_pred + intercept
         trait_est[:,0] = trait_pred.mean(axis=1)
         trait_est[:,1] = trait_pred.std(ddof=1,axis=1)
