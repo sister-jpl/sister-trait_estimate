@@ -28,7 +28,7 @@ def main():
 
     # Load data
     _ = ray.get([a.read_file.remote(args.rfl_file,'envi') for a,b in zip(actors,args.models)])
-    _ = ray.get([a.do.remote(apply_trait_model,[json_file,args.output_dir]) for a,json_file in zip(actors,args.models)])
+    _ = ray.get([a.do.remote(apply_trait_model,[json_file,args.out_dir]) for a,json_file in zip(actors,args.models)])
 
     ray.shutdown()
 
