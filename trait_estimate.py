@@ -77,14 +77,12 @@ def apply_trait_model(hy_obj,args):
     iterator = hy_obj.iterate(by = 'line',
                   resample=resample)
 
+    trait_est = np.zeros((hy_obj.columns,
+                          header_dict['bands']))
     while not iterator.complete:
         chunk = iterator.read_next()
         if not resample:
-            chunk = chunk[:,:,wave_mask]
-
-        trait_est = np.zeros((1,
-                              hy_obj.columns,
-                              header_dict['bands']))
+            chunk = chunk[:,wave_mask]
 
         # Apply spectrum transforms
         for transform in  trait_model['model']["transform"]:
@@ -95,16 +93,16 @@ def apply_trait_model(hy_obj,args):
                 chunk = np.log(1/chunk)
             if transform == "mean":
                 mean = chunk.mean(axis=2)
-                chunk = chunk/mean[:,:,np.newaxis]
+                chunk = chunk/mean[:,np.newaxis]
 
         trait_pred = np.einsum('jk,lm->jl',chunk,coeffs, optimize='optimal')
         trait_pred = trait_pred + intercept
-        trait_est[:,:,0] = trait_pred.mean(axis=1)
-        trait_est[:,:,1] = trait_pred.std(ddof=1,axis=1)
-
+        trait_est[:,0] = trait_pred.mean(axis=1)
+        trait_est[:,1] = trait_pred.std(ddof=1,axis=1)
         nd_mask = hy_obj.mask['no_data'][iterator.current_line]
-        trait_est[:,~nd_mask] = -9999
-        writer.write_line(trait_est[0], iterator.current_line)
+        trait_est[~nd_mask] = -9999
+
+        writer.write_line(trait_est, iterator.current_line)
     writer.close()
 
 
