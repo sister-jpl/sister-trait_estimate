@@ -44,7 +44,7 @@ def apply_trait_model(hy_obj,args):
         intercept = np.array(trait_model['model']['intercepts'])
         model_waves = np.array(trait_model['wavelengths'])
 
-    output_base = hy_obj.base_name.replace('rfl',trait_model["name"].lower())
+    output_base = '_'.join(hy_obj.base_name.split('_')[:-1]) + '_' +trait_model["name"].lower()
     print(output_base)
 
     hy_obj.create_bad_bands([[300,400],[1337,1430],[1800,1960],[2450,2600]])
