@@ -47,6 +47,10 @@ def apply_trait_model(hy_obj,args):
     output_base = '_'.join(hy_obj.base_name.split('_')[:-1]) + '_' +trait_model["name"].lower()
     print(output_base)
 
+    if (hy_obj.wavelengths.min() > model_waves.min()) |  (hy_obj.wavelengths.max() < model_waves.max()):
+        print('%s model wavelengths outside of image wavelength range, skipping....' % trait_model["name"])
+        return
+
     hy_obj.create_bad_bands([[300,400],[1337,1430],[1800,1960],[2450,2600]])
     hy_obj.resampler['type'] = 'cubic'
 
@@ -70,8 +74,7 @@ def apply_trait_model(hy_obj,args):
 
     writer = WriteENVI(output_name,header_dict)
 
-    iterator = hy_obj.iterate(by = 'chunk',
-                  chunk_size = (100,100),
+    iterator = hy_obj.iterate(by = 'line',
                   resample=resample)
 
     while not iterator.complete:
@@ -79,32 +82,29 @@ def apply_trait_model(hy_obj,args):
         if not resample:
             chunk = chunk[:,:,wave_mask]
 
-        trait_est = np.zeros((chunk.shape[0],
-                                chunk.shape[1],
-                                header_dict['bands']))
+        trait_est = np.zeros((1,
+                              hy_obj.columns,
+                              header_dict['bands']))
 
         # Apply spectrum transforms
         for transform in  trait_model['model']["transform"]:
             if  transform== "vector":
-                norm = np.linalg.norm(chunk,axis=2)
-                chunk = chunk/norm[:,:,np.newaxis]
+                norm = np.linalg.norm(chunk,axis=1)
+                chunk = chunk/norm[:,np.newaxis]
             if transform == "absorb":
                 chunk = np.log(1/chunk)
             if transform == "mean":
                 mean = chunk.mean(axis=2)
                 chunk = chunk/mean[:,:,np.newaxis]
 
-        trait_pred = np.einsum('jkl,ml->jkm',chunk,coeffs, optimize='optimal')
+        trait_pred = np.einsum('jk,lm->jl',chunk,coeffs, optimize='optimal')
         trait_pred = trait_pred + intercept
-        trait_est[:,:,0] = trait_pred.mean(axis=2)
-        trait_est[:,:,1] = trait_pred.std(ddof=1,axis=2)
+        trait_est[:,:,0] = trait_pred.mean(axis=1)
+        trait_est[:,:,1] = trait_pred.std(ddof=1,axis=1)
 
-        nd_mask = hy_obj.mask['no_data'][iterator.current_line:iterator.current_line+chunk.shape[0],
-                                         iterator.current_column:iterator.current_column+chunk.shape[1]]
-        trait_est[~nd_mask] = -9999
-        writer.write_chunk(trait_est,
-                           iterator.current_line,
-                           iterator.current_column)
+        nd_mask = hy_obj.mask['no_data'][iterator.current_line]
+        trait_est[:,~nd_mask] = -9999
+        writer.write_line(trait_est[0], iterator.current_line)
     writer.close()
 
 
