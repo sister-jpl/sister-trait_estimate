@@ -7,11 +7,13 @@ from hytools.io.envi import WriteENVI
 
 
 def main():
-    desc = "Estimate traits"
+    desc = "Estimate vegetation functional traits"
 
     parser = argparse.ArgumentParser(description=desc)
     parser.add_argument('rfl_file', type=str,
                         help='Input reflectance image')
+    parser.add_argument('frac_file', type=str,
+                        help='Input fractional cover image')
     parser.add_argument('out_dir', type=str,
                         help='Output directory')
     parser.add_argument('--models', nargs='+',
@@ -34,6 +36,12 @@ def main():
 
 def apply_trait_model(hy_obj,args):
     '''Apply trait model(s) to image and export to file.
+
+    hy_obj = ht.HyTools()
+    hy_obj.read_file("/Users/achlus/data1/temp/SISTER_PRISMA_20200216T185549_L2A_CORFL_000/SISTER_PRISMA_20200216T185549_L2A_CORFL_000")
+    json_file =  '/Users/achlus/Dropbox/rs/sister/repos/sister-trait_estimate/models/PLSR_raw_coef_LMA_1000_2400.json'
+    fc_file = "/Users/achlus/data1/temp/SISTER_PRISMA_20200216T185549_L2A_CORFL_000/SISTER_PRISMA_20200216T185549_L2A_FRCOV_000"
+
     '''
 
     json_file,output_dir =args
@@ -57,6 +65,7 @@ def apply_trait_model(hy_obj,args):
     #Check if wavelengths match
     resample = not all(x in hy_obj.wavelengths for x in model_waves)
     if resample:
+        print('Spectral resampling required')
         hy_obj.resampler['out_waves'] = model_waves
     else:
         wave_mask = [np.argwhere(x==hy_obj.wavelengths)[0][0] for x in model_waves]
@@ -67,7 +76,8 @@ def apply_trait_model(hy_obj,args):
     header_dict['data ignore value'] = -9999
     header_dict['data type'] = 4
     header_dict['band names'] = ["%s_mean" % trait_model["name"].lower(),
-                                 "%s_std" % trait_model["name"].lower()]
+                                 "%s_std" % trait_model["name"].lower(),
+                                 "%s_qa" % trait_model["name"].lower()]
     header_dict['bands'] = len(header_dict['band names'])
 
     output_name = "%s/%s" % (output_dir,output_base)
@@ -79,6 +89,7 @@ def apply_trait_model(hy_obj,args):
 
     trait_est = np.zeros((hy_obj.columns,
                           header_dict['bands']))
+
     while not iterator.complete:
         chunk = iterator.read_next()
         if not resample:
@@ -92,17 +103,21 @@ def apply_trait_model(hy_obj,args):
             if transform == "absorb":
                 chunk = np.log(1/chunk)
             if transform == "mean":
-                mean = chunk.mean(axis=2)
+                mean = chunk.mean(axis=1)
                 chunk = chunk/mean[:,np.newaxis]
 
         trait_pred = np.dot(chunk,coeffs)
         trait_pred = trait_pred + intercept
         trait_est[:,0] = trait_pred.mean(axis=1)
         trait_est[:,1] = trait_pred.std(ddof=1,axis=1)
+        qa = (trait_est[:,0] > trait_model['model_diagnostics']['min']) & (trait_est[:,0] < trait_model['model_diagnostics']['max'])
+        trait_est[:,2] = qa.astype(int)
         nd_mask = hy_obj.mask['no_data'][iterator.current_line]
         trait_est[~nd_mask] = -9999
 
         writer.write_line(trait_est, iterator.current_line)
+
+
     writer.close()
 
 
