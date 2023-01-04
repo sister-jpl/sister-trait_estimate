@@ -1,4 +1,4 @@
-# SISTER Trait estimates PGE Documentation## DescriptionThe L2A trait estimate PGE takes as input surface reflectance dataset and fraction cover map and applies a partial least squares regression (PLSR) algorithms to generate maps of the following vegetation canopy traits:
+# SISTER Trait estimate PGE Documentation## DescriptionThe L2A trait estimate PGE takes as input surface reflectance dataset and fraction cover map and applies a partial least squares regression (PLSR) algorithms to generate maps of the following vegetation canopy traits:
 
 - Chlorophyll content (ug/cm2) 
 - Nitrogen concentration (% dry mass)
