@@ -49116,7 +49116,7 @@
         "rmse": 3.0631801489386308
     },
     "full_name": "Nitrogen concentration",
-    "short_name": "nit_mass",
+    "short_name": "nit",
     "spectrometer": "avc+neon",
     "type": "plsr",
     "fulkl_units": "Milligrams per gram",

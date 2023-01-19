@@ -12042,7 +12042,7 @@
         "rmse": 4.645086189357296
     },
     "full_name": "Chlorophyll content",
-    "short_name": "chl_area",
+    "short_name": "chl",
     "spectrometer": "avc+neon",
     "type": "plsr",
     "full_units": "Micrograms per centimeter squared",
