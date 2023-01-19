@@ -49115,10 +49115,12 @@
         "r_squared": 0.7012625438080616,
         "rmse": 3.0631801489386308
     },
-    "name": "Nitrogen",
+    "full_name": "Nitrogen concentration",
+    "short_name": "nit_mass",
     "spectrometer": "avc+neon",
     "type": "plsr",
-    "units": "mg/g",
+    "fulkl_units": "Milligrams per gram",
+    "short_units": "mg/g",
     "wavelength_units": "nanometers",
     "wavelengths": [
         1000.0,

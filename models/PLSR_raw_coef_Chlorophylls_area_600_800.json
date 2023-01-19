@@ -12041,10 +12041,12 @@
         "r_squared": 0.5194620389632708,
         "rmse": 4.645086189357296
     },
-    "name": "Chlorophylls_area",
+    "full_name": "Chlorophyll content",
+    "short_name": "chl_area",
     "spectrometer": "avc+neon",
     "type": "plsr",
-    "units": "\u03bcg/cm2",
+    "full_units": "Micrograms per centimeter squared",
+    "short_units": "ug/cm2",
     "wavelength_units": "nanometers",
     "wavelengths": [
         600.0,

@@ -49115,10 +49115,12 @@
         "r_squared": 0.8116893325114349,
         "rmse": 37.967997673676706
     },
-    "name": "LMA",
+    "full_name": "Leaf mass per area",
+    "short_name": "lma",
     "spectrometer": "avc+neon",
     "type": "plsr",
-    "units": "g/m2",
+    "full_units": "Grams per meter squared",
+    "short_units": "g/m2",
     "wavelength_units": "nanometers",
     "wavelengths": [
         1000.0,
