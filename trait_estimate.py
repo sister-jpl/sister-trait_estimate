@@ -49,16 +49,6 @@ def main():
 def apply_trait_model(hy_obj,args):
     '''Apply trait model(s) to image and export to file.
 
-    hy_obj = ht.HyTools()
-    hy_obj.read_file("/Users/achlus/data1/temp/SISTER_PRISMA_20200216T185549_L2A_CORFL_000/SISTER_PRISMA_20200216T185549_L2A_CORFL_000")
-    json_file =  '/Users/achlus/Dropbox/rs/sister/repos/sister-trait_estimate/models/PLSR_raw_coef_LMA_1000_2400.json'
-    fc_file = "/Users/achlus/data1/temp/SISTER_PRISMA_20200216T185549_L2A_CORFL_000/SISTER_PRISMA_20200216T185549_L2A_FRCOV_000"
-    fc_obj = ht.HyTools()
-    fc_obj.read_file(fc_file)
-
-    hy_obj.mask['veg'] = fc_obj.get_band(1) >= .5
-    output_dir = '/Users/achlus/data1/temp/'
-
     '''
 
     json_file,output_dir =args
@@ -124,7 +114,6 @@ def apply_trait_model(hy_obj,args):
 
     geotiff =  "temp/%s.tif" % (output_dir,output_base)
 
-    in_file = gdal.Open(hy_obj.file_name)
 
     band_names = ["%s_mean" % trait_model["short_name"].lower(),
                                  "%s_std_dev" % trait_model["short_name"].lower(),
@@ -137,6 +126,8 @@ def apply_trait_model(hy_obj,args):
     descriptions= ["%s MEAN" % trait_model["full_name"].upper(),
                   "%s STANDARD DEVIATION" % trait_model["full_name"].upper(),
                   "QUALITY ASSURANCE MASK"]
+
+    in_file = gdal.Open(hy_obj.file_name)
 
     # Set the output raster transform and projection properties
     driver = gdal.GetDriverByName("GTIFF")
@@ -162,7 +153,8 @@ def apply_trait_model(hy_obj,args):
 
     COGtiff =  "output/%s.tif" % (output_dir,output_base)
 
-    os.system("gdal_translate %s %s -of COG -co COMPRESS=LZW" % (geotiff,COGtiff))
+    os.system(f"gdaladdo -minsize 900 {geotiff}")
+    os.system(f"gdal_translate {geotiff} {COGtiff} -co COMPRESS=LZW -co TILED=YES -co COPY_SRC_OVERVIEWS=YES")
 
 
 if __name__== "__main__":
