@@ -1,49 +1,99 @@
-import argparse
+import glob
 import json
 import os
+import sys
 import ray
 import numpy as np
 from osgeo import gdal
 import hytools as ht
 from hytools.io.envi import WriteENVI
+from PIL import Image
 
 
 def main():
-    desc = "Estimate vegetation functional traits"
 
-    parser = argparse.ArgumentParser(description=desc)
-    parser.add_argument('rfl_file', type=str,
-                        help='Input reflectance image')
-    parser.add_argument('frac_file', type=str,
-                        help='Input fractional cover image')
-    parser.add_argument('out_dir', type=str,
-                        help='Output directory')
-    parser.add_argument('--models', nargs='+',
-                        help='Trait models', required=True)
+    pge_path = os.path.dirname(os.path.realpath(__file__))
 
-    args = parser.parse_args()
+    run_config_json = sys.argv[1]
+
+    with open(run_config_json, 'r') as in_file:
+        run_config =json.load(in_file)
+
+    os.mkdir('output')
+    os.mkdir('temp')
+
+    rfl_base_name = os.path.basename(run_config['inputs']['l2a_granule'])
+    rfl_file = f'input/{rfl_base_name}/{rfl_base_name}.bin'
+    rfl_met = f'input/{rfl_base_name}/{rfl_base_name}.met.json'
+
+    fc_base_name = os.path.basename(run_config['inputs']['frcover_granule'])
+    fc_file = f'input/{fc_base_name}/{fc_base_name}.tif'
+
+    trait_base_name = fc_base_name.replace('FRCOV','TRAITS')
+    trait_met = f'output/{trait_base_name}.met.json'
+
+    models = glob.glob(f'{pge_path}/models/PLSR*.json')
 
     if ray.is_initialized():
         ray.shutdown()
-    ray.init(num_cpus = len(args.models))
+    ray.init(num_cpus = len(models))
 
     HyTools = ray.remote(ht.HyTools)
-    actors = [HyTools.remote() for rfl_file in args.models]
+    actors = [HyTools.remote() for rfl_file in models]
 
     # Load data
-    _ = ray.get([a.read_file.remote(args.rfl_file,'envi') for a,b in zip(actors,args.models)])
+    _ = ray.get([a.read_file.remote(rfl_file,'envi') for a,b in zip(actors,models)])
 
     # Set fractional cover mask
-    fc_obj = ht.HyTools()
-    fc_obj.read_file(fc_file)
-    _ = ray.get([a.set_mask.remote(fc_obj.get_band(1) >= .5,'veg') for a,b in zip(actors,args.models)])
+    fc_obj = gdal.Open(fc_file)
+    veg_mask = fc_obj.GetRasterBand(2).ReadAsArray() >= .5
+
+    _ = ray.get([a.set_mask.remote(veg_mask,'veg') for a,b in zip(actors,models)])
 
     del fc_obj
 
-    _ = ray.get([a.do.remote(apply_trait_model,[json_file,args.out_dir]) for a,json_file in zip(actors,args.models)])
+    _ = ray.get([a.do.remote(apply_trait_model,[json_file,run_config['inputs']['CRID']]) for a,json_file in zip(actors,models)])
 
     ray.shutdown()
 
+    generate_metadata(rfl_met,
+                      trait_met,
+                      {'product': 'TRAITS',
+                      'processing_level': 'L2A',
+                      'description' : 'Canopy biochemistry, chlorophyll content, nitrogen concentration,leaf mass per area'})
+
+    bands = []
+
+    for name in ['NIT','CHL','LMA']:
+        file = glob.glob(f'output/*{name}*.tif')[0]
+        gdal_obj = gdal.Open(file)
+        band = gdal_obj.GetRasterBand(1)
+        bands.append(np.copy(band.ReadAsArray()))
+
+    rgb=  np.array(bands)
+    rgb[rgb == band.GetNoDataValue()] = np.nan
+
+    rgb = np.moveaxis(rgb,0,-1).astype(float)
+    bottom = np.nanpercentile(rgb,5,axis = (0,1))
+    top = np.nanpercentile(rgb,95,axis = (0,1))
+    rgb = np.clip(rgb,bottom,top)
+    rgb = (rgb-np.nanmin(rgb,axis=(0,1)))/(np.nanmax(rgb,axis= (0,1))-np.nanmin(rgb,axis= (0,1)))
+    rgb = (rgb*255).astype(np.uint8)
+
+    im = Image.fromarray(rgb)
+    im.save(f'output/{trait_base_name}.png')
+
+
+def generate_metadata(in_file,out_file,metadata):
+
+    with open(in_file, 'r') as in_obj:
+        in_met =json.load(in_obj)
+
+    for key,value in metadata.items():
+        in_met[key] = value
+
+    with open(out_file, 'w') as out_obj:
+        json.dump(in_met,out_obj,indent=3)
 
 
 def apply_trait_model(hy_obj,args):
@@ -51,7 +101,7 @@ def apply_trait_model(hy_obj,args):
 
     '''
 
-    json_file,output_dir =args
+    json_file,CRID =args
 
     with open(json_file, 'r') as json_obj:
         trait_model = json.load(json_obj)
@@ -59,9 +109,8 @@ def apply_trait_model(hy_obj,args):
         intercept = np.array(trait_model['model']['intercepts'])
         model_waves = np.array(trait_model['wavelengths'])
 
-
-    output_base = '_'.join(hy_obj.base_name.split('_')[:-2]) + '_TE_' +trait_model["short_name"].upper() + '_CRID'
-    print(output_base)
+    trait_abbrv = trait_model["short_name"].upper()
+    out_base = hy_obj.base_name.replace("CORFL","TRAITS")
 
     if (hy_obj.wavelengths.min() > model_waves.min()) |  (hy_obj.wavelengths.max() < model_waves.max()):
         print('%s model wavelengths outside of image wavelength range, skipping....' % trait_model["name"])
@@ -112,8 +161,9 @@ def apply_trait_model(hy_obj,args):
         nd_mask = hy_obj.mask['no_data'][iterator.current_line] & hy_obj.mask['veg'][iterator.current_line]
         trait_array[:,iterator.current_line,~nd_mask] = -9999
 
-    geotiff =  "temp/%s.tif" % (output_dir,output_base)
 
+    temp_file =  f'temp/{out_base}_{trait_abbrv}_{CRID}.tif'
+    out_file =  f'output/{out_base}_{trait_abbrv}_{CRID}.tif'
 
     band_names = ["%s_mean" % trait_model["short_name"].lower(),
                                  "%s_std_dev" % trait_model["short_name"].lower(),
@@ -127,11 +177,12 @@ def apply_trait_model(hy_obj,args):
                   "%s STANDARD DEVIATION" % trait_model["full_name"].upper(),
                   "QUALITY ASSURANCE MASK"]
 
+
     in_file = gdal.Open(hy_obj.file_name)
 
     # Set the output raster transform and projection properties
     driver = gdal.GetDriverByName("GTIFF")
-    tiff = driver.Create(geotiff,
+    tiff = driver.Create(temp_file,
                          hy_obj.columns,
                          hy_obj.lines,
                          3,
@@ -151,11 +202,8 @@ def apply_trait_model(hy_obj,args):
         band.SetMetadataItem("DESCRIPTION",descriptions[i-1])
     del tiff, driver
 
-    COGtiff =  "output/%s.tif" % (output_dir,output_base)
-
-    os.system(f"gdaladdo -minsize 900 {geotiff}")
-    os.system(f"gdal_translate {geotiff} {COGtiff} -co COMPRESS=LZW -co TILED=YES -co COPY_SRC_OVERVIEWS=YES")
-
+    os.system(f"gdaladdo -minsize 900 {temp_file}")
+    os.system(f"gdal_translate {temp_file} {out_file} -co COMPRESS=LZW -co TILED=YES -co COPY_SRC_OVERVIEWS=YES")
 
 if __name__== "__main__":
     main()
