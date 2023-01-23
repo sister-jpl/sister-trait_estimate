@@ -2,6 +2,8 @@
 conda create -y --name sister python=3.8
 source activate sister
 
+pip install numpy
+
 git clone https://github.com/EnSpec/hytools.git
 cd hytools
 pip install .
