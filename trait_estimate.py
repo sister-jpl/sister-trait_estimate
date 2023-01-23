@@ -46,7 +46,7 @@ def main():
 
     # Set fractional cover mask
     fc_obj = gdal.Open(fc_file)
-    veg_mask = fc_obj.GetRasterBand(2).ReadAsArray() >= .5
+    veg_mask = fc_obj.GetRasterBand(2).ReadAsArray() >= run_config['inputs']['veg_cover']
 
     _ = ray.get([a.set_mask.remote(veg_mask,'veg') for a,b in zip(actors,models)])
 
