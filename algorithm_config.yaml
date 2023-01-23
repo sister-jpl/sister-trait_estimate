@@ -23,7 +23,7 @@ inputs:
 
   config:
     - name: veg_cover
-      data_type:
+      data_type: number
       default: 0.5
       description: Minimum vegetation cover threshold
 
