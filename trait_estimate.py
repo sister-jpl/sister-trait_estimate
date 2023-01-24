@@ -23,12 +23,13 @@ def main():
     os.mkdir('output')
     os.mkdir('temp')
 
+    CRID = run_config["inputs"]["CRID"]
+
     rfl_base_name = os.path.basename(run_config['inputs']['l2a_rfl'])
-    sister,sensor,level,product,datetime,CRID = rfl_base_name.split('_')
+    sister,sensor,level,product,datetime,in_CRID = rfl_base_name.split('_')
 
     rfl_file = f'input/{rfl_base_name}/{rfl_base_name}.bin'
     rfl_met = rfl_file.replace('.bin','.met.json')
-
     fc_base_name = os.path.basename(run_config['inputs']['l2a_frcover'])
     fc_file = f'input/{fc_base_name}/{fc_base_name}.tif'
 
@@ -55,15 +56,15 @@ def main():
 
     del fc_obj
 
-    _ = ray.get([a.do.remote(apply_trait_model,[json_file,run_config['inputs']['CRID']]) for a,json_file in zip(actors,models)])
+    _ = ray.get([a.do.remote(apply_trait_model,[json_file,CRID]) for a,json_file in zip(actors,models)])
 
     ray.shutdown()
 
     bands = []
 
-    for name in ['NIT','CHL','LMA']:
-        file = glob.glob(f'output/*{name}*.tif')[0]
-        gdal_obj = gdal.Open(file)
+    for trait_abbrv in ['NIT','CHL','LMA']:
+        tif_file = f'output/SISTER_{sensor}_L2A_VEGBIOCHEM_{datetime}_{CRID}_{trait_abbrv}.tif'
+        gdal_obj = gdal.Open(tif_file)
         band = gdal_obj.GetRasterBand(1)
         bands.append(np.copy(band.ReadAsArray()))
 
@@ -86,6 +87,12 @@ def main():
                       'processing_level': 'L2A',
                       'description' : 'Vegetation biochemistry RGB quicklook. R: Nitrogen, G: Chlorophyll, B: Leaf Mass per Area',
                        })
+
+    shutil.copyfile(run_config_json,
+                    qlook_file.replace('.png','.runconfig.json'))
+
+    shutil.copyfile('run.log',
+                    qlook_file.replace('.png','.log'))
 
 def generate_metadata(in_file,out_file,metadata):
 
@@ -162,7 +169,7 @@ def apply_trait_model(hy_obj,args):
         trait_array[:,iterator.current_line,~nd_mask] = -9999
 
     trait_abbrv = trait_model["short_name"].upper()
-    sister,sensor,level,product,datetime,CRID =  hy_obj.base_name.split('_')
+    sister,sensor,level,product,datetime,in_CRID =  hy_obj.base_name.split('_')
 
     temp_file =  f'temp/SISTER_{sensor}_L2A_VEGBIOCHEM_{datetime}_{CRID}_{trait_abbrv}.tif'
     out_file =  temp_file.replace('temp','output')
