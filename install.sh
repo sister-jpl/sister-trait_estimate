@@ -2,7 +2,9 @@
 conda create -y --name sister python=3.8
 source activate sister
 
-pip install numpy
+conda install gdal -y
+
+pip install Pillow
 
 git clone https://github.com/EnSpec/hytools.git
 cd hytools

@@ -2,6 +2,7 @@ import glob
 import json
 import os
 import sys
+import shutil
 import ray
 import numpy as np
 from osgeo import gdal
@@ -22,15 +23,17 @@ def main():
     os.mkdir('output')
     os.mkdir('temp')
 
-    rfl_base_name = os.path.basename(run_config['inputs']['l2a_granule'])
-    rfl_file = f'input/{rfl_base_name}/{rfl_base_name}.bin'
-    rfl_met = f'input/{rfl_base_name}/{rfl_base_name}.met.json'
+    rfl_base_name = os.path.basename(run_config['inputs']['l2a_rfl'])
+    sister,sensor,level,product,datetime,CRID = rfl_base_name.split('_')
 
-    fc_base_name = os.path.basename(run_config['inputs']['frcover_granule'])
+    rfl_file = f'input/{rfl_base_name}/{rfl_base_name}.bin'
+    rfl_met = rfl_file.replace('.bin','.met.json')
+
+    fc_base_name = os.path.basename(run_config['inputs']['l2a_frcover'])
     fc_file = f'input/{fc_base_name}/{fc_base_name}.tif'
 
-    trait_base_name = fc_base_name.replace('FRCOV','TRAITS')
-    trait_met = f'output/{trait_base_name}.met.json'
+    qlook_file = f'output/SISTER_{sensor}_L2A_VEGBIOCHEM_{datetime}_{CRID}.png'
+    qlook_met = qlook_file.replace('.png','.met.json')
 
     models = glob.glob(f'{pge_path}/models/PLSR*.json')
 
@@ -56,12 +59,6 @@ def main():
 
     ray.shutdown()
 
-    generate_metadata(rfl_met,
-                      trait_met,
-                      {'product': 'TRAITS',
-                      'processing_level': 'L2A',
-                      'description' : 'Canopy biochemistry, chlorophyll content, nitrogen concentration,leaf mass per area'})
-
     bands = []
 
     for name in ['NIT','CHL','LMA']:
@@ -81,8 +78,14 @@ def main():
     rgb = (rgb*255).astype(np.uint8)
 
     im = Image.fromarray(rgb)
-    im.save(f'output/{trait_base_name}.png')
+    im.save(qlook_file)
 
+    generate_metadata(rfl_met,
+                      qlook_met,
+                      {'product': 'VEGBIOCHEM',
+                      'processing_level': 'L2A',
+                      'description' : 'Vegetation biochemistry RGB quicklook. R: Nitrogen, G: Chlorophyll, B: Leaf Mass per Area',
+                       })
 
 def generate_metadata(in_file,out_file,metadata):
 
@@ -108,9 +111,6 @@ def apply_trait_model(hy_obj,args):
         coeffs = np.array(trait_model['model']['coefficients']).T
         intercept = np.array(trait_model['model']['intercepts'])
         model_waves = np.array(trait_model['wavelengths'])
-
-    trait_abbrv = trait_model["short_name"].upper()
-    out_base = hy_obj.base_name.replace("CORFL","TRAITS")
 
     if (hy_obj.wavelengths.min() > model_waves.min()) |  (hy_obj.wavelengths.max() < model_waves.max()):
         print('%s model wavelengths outside of image wavelength range, skipping....' % trait_model["name"])
@@ -161,9 +161,11 @@ def apply_trait_model(hy_obj,args):
         nd_mask = hy_obj.mask['no_data'][iterator.current_line] & hy_obj.mask['veg'][iterator.current_line]
         trait_array[:,iterator.current_line,~nd_mask] = -9999
 
+    trait_abbrv = trait_model["short_name"].upper()
+    sister,sensor,level,product,datetime,CRID =  hy_obj.base_name.split('_')
 
-    temp_file =  f'temp/{out_base}_{trait_abbrv}_{CRID}.tif'
-    out_file =  f'output/{out_base}_{trait_abbrv}_{CRID}.tif'
+    temp_file =  f'temp/SISTER_{sensor}_L2A_VEGBIOCHEM_{datetime}_{CRID}_{trait_abbrv}.tif'
+    out_file =  temp_file.replace('temp','output')
 
     band_names = ["%s_mean" % trait_model["short_name"].lower(),
                                  "%s_std_dev" % trait_model["short_name"].lower(),
@@ -204,6 +206,17 @@ def apply_trait_model(hy_obj,args):
 
     os.system(f"gdaladdo -minsize 900 {temp_file}")
     os.system(f"gdal_translate {temp_file} {out_file} -co COMPRESS=LZW -co TILED=YES -co COPY_SRC_OVERVIEWS=YES")
+
+    rfl_met = hy_obj.file_name.replace('.bin','.met.json')
+    trait_met =out_file.replace('.tif','.met.json')
+
+    generate_metadata(rfl_met,
+                      trait_met,
+                      {'product': 'VEGBIOCHEM',
+                      'processing_level': 'L2A',
+                      'description' : trait_model["full_name"],
+                       })
+
 
 if __name__== "__main__":
     main()
