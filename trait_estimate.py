@@ -7,7 +7,6 @@ import ray
 import numpy as np
 from osgeo import gdal
 import hytools as ht
-from hytools.io.envi import WriteENVI
 from PIL import Image
 
 
@@ -18,6 +17,7 @@ def main():
     run_config_json = sys.argv[1]
 
     with open(run_config_json, 'r') as in_file:
+        run_config =json.load(in_file)
 
     os.mkdir('output')
     os.mkdir('temp')
