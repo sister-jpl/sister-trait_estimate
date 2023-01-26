@@ -36,7 +36,8 @@ def main():
     qlook_file = f'output/SISTER_{sensor}_L2A_VEGBIOCHEM_{datetime}_{CRID}.png'
     qlook_met = qlook_file.replace('.png','.met.json')
 
-    models = glob.glob(f'{pge_path}/models/PLSR*.json')
+    if sensor == 'DESIS':
+        models = glob.glob(f'{pge_path}/models/PLSR*.json')
 
     if ray.is_initialized():
         ray.shutdown()
