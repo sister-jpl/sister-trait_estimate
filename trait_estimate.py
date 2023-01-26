@@ -18,7 +18,6 @@ def main():
     run_config_json = sys.argv[1]
 
     with open(run_config_json, 'r') as in_file:
-        run_config =json.load(in_file)
 
     os.mkdir('output')
     os.mkdir('temp')
@@ -36,8 +35,7 @@ def main():
     qlook_file = f'output/SISTER_{sensor}_L2A_VEGBIOCHEM_{datetime}_{CRID}.png'
     qlook_met = qlook_file.replace('.png','.met.json')
 
-    if sensor == 'DESIS':
-        models = glob.glob(f'{pge_path}/models/PLSR*.json')
+    models = glob.glob(f'{pge_path}/models/PLSR*.json')
 
     if ray.is_initialized():
         ray.shutdown()
