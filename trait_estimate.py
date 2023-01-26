@@ -32,7 +32,7 @@ def main():
     fc_base_name = os.path.basename(run_config['inputs']['l2a_frcover'])
     fc_file = f'input/{fc_base_name}/{fc_base_name}.tif'
 
-    qlook_file = f'output/SISTER_{sensor}_L2A_VEGBIOCHEM_{datetime}_{CRID}.png'
+    qlook_file = f'output/SISTER_{sensor}_L2A_TRAITS_{datetime}_{CRID}.png'
     qlook_met = qlook_file.replace('.png','.met.json')
 
     models = glob.glob(f'{pge_path}/models/PLSR*.json')
@@ -62,7 +62,7 @@ def main():
     bands = []
 
     for trait_abbrv in ['NIT','CHL','LMA']:
-        tif_file = f'output/SISTER_{sensor}_L2A_VEGBIOCHEM_{datetime}_{CRID}_{trait_abbrv}.tif'
+        tif_file = f'output/SISTER_{sensor}_L2A_TRAITS_{datetime}_{CRID}_{trait_abbrv}.tif'
         gdal_obj = gdal.Open(tif_file)
         band = gdal_obj.GetRasterBand(1)
         bands.append(np.copy(band.ReadAsArray()))
@@ -82,7 +82,7 @@ def main():
 
     generate_metadata(rfl_met,
                       qlook_met,
-                      {'product': 'VEGBIOCHEM',
+                      {'product': 'TRAITS',
                       'processing_level': 'L2A',
                       'description' : 'Vegetation biochemistry RGB quicklook. R: Nitrogen, G: Chlorophyll, B: Leaf Mass per Area',
                        })
@@ -170,7 +170,7 @@ def apply_trait_model(hy_obj,args):
     trait_abbrv = trait_model["short_name"].upper()
     sister,sensor,level,product,datetime,in_CRID =  hy_obj.base_name.split('_')
 
-    temp_file =  f'temp/SISTER_{sensor}_L2A_VEGBIOCHEM_{datetime}_{CRID}_{trait_abbrv}.tif'
+    temp_file =  f'temp/SISTER_{sensor}_L2A_TRAITS_{datetime}_{CRID}_{trait_abbrv}.tif'
     out_file =  temp_file.replace('temp','output')
 
     band_names = ["%s_mean" % trait_model["short_name"].lower(),
@@ -218,7 +218,7 @@ def apply_trait_model(hy_obj,args):
 
     generate_metadata(rfl_met,
                       trait_met,
-                      {'product': 'VEGBIOCHEM',
+                      {'product': 'TRAITS',
                       'processing_level': 'L2A',
                       'description' : trait_model["full_name"],
                        })
