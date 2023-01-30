@@ -218,8 +218,8 @@ def apply_trait_model(hy_obj,args):
 
     generate_metadata(rfl_met,
                       trait_met,
-                      {'product': 'TRAITS',
-                      'processing_level': 'L2A',
+                      {'product': 'VEGBIOCHEM',
+                      'processing_level': 'L2B',
                       'description' : trait_model["full_name"],
                        })
 
