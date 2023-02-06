@@ -9,3 +9,6 @@ pip install Pillow
 git clone https://github.com/EnSpec/hytools.git
 cd hytools
 pip install .
+
+
+pip install grpcio==1.48.2
