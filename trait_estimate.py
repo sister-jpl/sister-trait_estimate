@@ -80,6 +80,7 @@ def main():
         description = 'Vegetation biochemistry RGB quicklook. R: Nitrogen, G: Chlorophyll, B: Leaf Mass per Area'
 
     else:
+
         tif_file = f'output/SISTER_{sensor}_L2B_VEGBIOCHEM_{datetime}_{crid}_CHL.tif'
         gdal_obj = gdal.Open(tif_file)
         band = gdal_obj.GetRasterBand(1)
@@ -89,7 +90,7 @@ def main():
         bottom = np.nanpercentile(band_arr,5)
         top = np.nanpercentile(band_arr,95)
         band_arr = np.clip(band_arr,bottom,top)
-        band_arr = (band_arr-np.nanmin(rgb))/(np.nanmax(band_arr)-np.nanmin(band_arr))
+        band_arr = (band_arr-np.nanmin(band_arr))/(np.nanmax(band_arr)-np.nanmin(band_arr))
 
         cmap = plt.get_cmap('RdYlGn')
         qlook = cmap(band_arr)[:,:,:3]
