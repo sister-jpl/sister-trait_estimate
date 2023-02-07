@@ -8,7 +8,7 @@ import numpy as np
 from osgeo import gdal
 import hytools as ht
 from PIL import Image
-
+import matplotlib.pyplot as plt
 
 def main():
 
@@ -53,38 +53,59 @@ def main():
 
     _ = ray.get([a.set_mask.remote(veg_mask,'veg') for a,b in zip(actors,models)])
 
-    del fc_obj
-
     _ = ray.get([a.do.remote(apply_trait_model,[json_file,crid]) for a,json_file in zip(actors,models)])
 
     ray.shutdown()
 
     bands = []
 
-    for trait_abbrv in ['NIT','CHL','LMA']:
-        tif_file = f'output/SISTER_{sensor}_L2B_VEGBIOCHEM_{datetime}_{crid}_{trait_abbrv}.tif'
+    if sensor != 'DESIS':
+        for trait_abbrv in ['NIT','CHL','LMA']:
+            tif_file = f'output/SISTER_{sensor}_L2B_VEGBIOCHEM_{datetime}_{crid}_{trait_abbrv}.tif'
+            gdal_obj = gdal.Open(tif_file)
+            band = gdal_obj.GetRasterBand(1)
+            band_arr = np.copy(band.ReadAsArray())
+            bands.append(band_arr)
+
+        rgb=  np.array(bands)
+        rgb[rgb == band.GetNoDataValue()] = np.nan
+
+        rgb = np.moveaxis(rgb,0,-1).astype(float)
+        bottom = np.nanpercentile(rgb,5,axis = (0,1))
+        top = np.nanpercentile(rgb,95,axis = (0,1))
+        rgb = np.clip(rgb,bottom,top)
+        rgb = (rgb-np.nanmin(rgb,axis=(0,1)))/(np.nanmax(rgb,axis= (0,1))-np.nanmin(rgb,axis= (0,1)))
+        rgb = (rgb*255).astype(np.uint8)
+        im = Image.fromarray(rgb)
+        description = 'Vegetation biochemistry RGB quicklook. R: Nitrogen, G: Chlorophyll, B: Leaf Mass per Area'
+
+    else:
+        tif_file = f'output/SISTER_{sensor}_L2B_VEGBIOCHEM_{datetime}_{crid}_CHL.tif'
         gdal_obj = gdal.Open(tif_file)
         band = gdal_obj.GetRasterBand(1)
-        bands.append(np.copy(band.ReadAsArray()))
+        band_arr = np.copy(band.ReadAsArray())
+        band_arr[band_arr == band.GetNoDataValue()] = np.nan
 
-    rgb=  np.array(bands)
-    rgb[rgb == band.GetNoDataValue()] = np.nan
+        bottom = np.nanpercentile(band_arr,5)
+        top = np.nanpercentile(band_arr,95)
+        band_arr = np.clip(band_arr,bottom,top)
+        band_arr = (band_arr-np.nanmin(rgb))/(np.nanmax(band_arr)-np.nanmin(band_arr))
 
-    rgb = np.moveaxis(rgb,0,-1).astype(float)
-    bottom = np.nanpercentile(rgb,5,axis = (0,1))
-    top = np.nanpercentile(rgb,95,axis = (0,1))
-    rgb = np.clip(rgb,bottom,top)
-    rgb = (rgb-np.nanmin(rgb,axis=(0,1)))/(np.nanmax(rgb,axis= (0,1))-np.nanmin(rgb,axis= (0,1)))
-    rgb = (rgb*255).astype(np.uint8)
+        cmap = plt.get_cmap('RdYlGn')
+        qlook = cmap(band_arr)[:,:,:3]
+        qlook = (255 * qlook).astype(np.uint8)
+        qlook[band_arr == -9999] = 0
 
-    im = Image.fromarray(rgb)
+        im = Image.fromarray(qlook, 'RGB')
+        description = 'Vegetation biochemistry quicklook. Chlorophyll'
+
     im.save(qlook_file)
 
     generate_metadata(rfl_met,
                       qlook_met,
-                      {'product': 'TRAITS',
-                      'processing_level': 'L2A',
-                      'description' : 'Vegetation biochemistry RGB quicklook. R: Nitrogen, G: Chlorophyll, B: Leaf Mass per Area',
+                      {'product': 'VEGBIOCHEM',
+                      'processing_level': 'L2B',
+                      'description' : description,
                        })
 
     shutil.copyfile(run_config_json,
@@ -119,7 +140,7 @@ def apply_trait_model(hy_obj,args):
         model_waves = np.array(trait_model['wavelengths'])
 
     if (hy_obj.wavelengths.min() > model_waves.min()) |  (hy_obj.wavelengths.max() < model_waves.max()):
-        print('%s model wavelengths outside of image wavelength range, skipping....' % trait_model["name"])
+        print('%s model wavelengths outside of image wavelength range, skipping....' % trait_model["full_name"])
         return
 
     hy_obj.create_bad_bands([[300,400],[1337,1430],[1800,1960],[2450,2600]])
