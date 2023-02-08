@@ -11,9 +11,9 @@ infrared wavelengths outside of the spectral range of DESIS.
 
 ![AVIRIS trait estimate](./trait_estimate_example.png)
 
-## PGE ArgumentsIn addition to required MAAP job submission arguments the L2A spectral resampling PGE also takes the following argument(s):|Argument| Type |  Description | Default||---|---|---|---|| reflectance_dataset| string |L2A reflectance dataset granule URL| -|| frcover_dataset| string |L2B fractional cover granule URL| -|
-| veg_cover| string | Minimum vegetation cover to apply algorith (0.0-1.0)| 0.5|
-| crid| string | Composite release identifier| 000|
+## PGE ArgumentsIn addition to required MAAP job submission arguments the L2A spectral resampling PGE also takes the following argument(s):|Argument| Type |  Description | Default||---|---|---|---|| reflectance_dataset| file |L2A reflectance dataset granule URL| -|| frcover_dataset| file |L2B fractional cover granule URL| -|
+| veg_cover| config | Minimum vegetation cover to apply algorith (0.0-1.0)| 0.5|
+| crid| config | Composite release identifier| 000|
 ## OutputsThe outputs of the L2B vegetation trait estimate PGE use the following naming convention:
 
     SISTER_<SENSOR>_L2B_VEGBIOCHEM_<YYYYMMDDTHHMMSS>_<CRID>_<SUBPRODUCT>|Product description| Units |Example filename ||---|---|---|
