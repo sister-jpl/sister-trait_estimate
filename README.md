@@ -16,7 +16,8 @@ infrared wavelengths outside of the spectral range of DESIS.
 | crid| string | Composite release identifier| 000|
 ## OutputsThe outputs of the L2B vegetation trait estimate PGE use the following naming convention:
 
-    SISTER_<SENSOR>_L2B_VEGBIOCHEM_<YYYYMMDDTHHMMSS>_<CRID>_<SUBPRODUCT>|Product description| Units |Example filename ||---|---|---|---|| Chlorophyll COGeotiff | - | SISTER\_AVNG\_L2B\_VEGBIOCHEM\_20220502T180901\_001\_CHL.tif |
+    SISTER_<SENSOR>_L2B_VEGBIOCHEM_<YYYYMMDDTHHMMSS>_<CRID>_<SUBPRODUCT>|Product description| Units |Example filename ||---|---|---|
+| Chlorophyll COGeotiff | - | SISTER\_AVNG\_L2B\_VEGBIOCHEM\_20220502T180901\_001\_CHL.tif |
 | 1. Chlorophyll content | ug/cm2 |  || 2. Chlorophyll content uncertainty | ug/cm2 |  |
 | 3. Quality assurance mask  | - |  |
 | Chlorophyll metadata | - | SISTER\_AVNG\_L2B\_VEGBIOCHEM\_20220502T180901\_001\_CHL.met.json || Nitrogen COGeotiff | mg/g| SISTER\_AVNG\_L2B\_VEGBIOCHEM\_20220502T180901\_001\_NIT.tif || 1. Nitrogen concentration | - |  || 2. Nitrogen concentration uncertainty | mg/g |  |
