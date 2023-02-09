@@ -1,6 +1,6 @@
 #!/bin/bash
 
-source activate python38
+source activate sister
 
 pge_dir=$(cd "$(dirname "$0")" ; pwd -P)
 
