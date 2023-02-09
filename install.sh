@@ -7,3 +7,5 @@ conda install gdal -y
 git clone https://github.com/EnSpec/hytools.git -b 1.5.0
 cd hytools
 pip install .
+
+pip install ray==2.2.0
