@@ -1,19 +1,23 @@
-# SISTER Trait estimate PGE Documentation## DescriptionThe L2B trait estimate PGE takes as input a surface reflectance dataset and a fraction cover map and applies a partial least squares regression (PLSR) algorithms to generate maps of the following vegetation canopy traits:
+# SISTER Trait estimate PGE Documentation## DescriptionThe L2B trait estimate PGE takes as input a surface reflectance dataset and a fractional cover map and applies partial least squares regression (PLSR) algorithms to generate maps of the following vegetation canopy traits:
 
 - Chlorophyll content (ug/cm2) 
-- Nitrogen concentration (g/mg)
+- Nitrogen concentration (mg/g)
 - Leaf mass per area (g/m2)
 
-For DESIS imagery only chlorophyll is estimated, models for nitrogen and leaf mass per area require
+Permuted PLSR models were developed using coincident NEON AOP canopy spectra, downsampled to 10nm, and field data collected by Wang et al. (2020). In addition to biochemical trait estimates, per-pixel uncertainties are also calculated as well as a quality assurance mask which flags pixels with trait estimates outside of the range of data used to build the model. For DESIS imagery only chlorophyll is estimated, models for nitrogen and leaf mass per area require
 infrared wavelengths outside of the spectral range of DESIS.
 
 ### AVIRIS Classic vegetation trait quicklook
 
 ![AVIRIS trait estimate](./trait_estimate_example.png)
 
-## PGE ArgumentsIn addition to required MAAP job submission arguments the L2A spectral resampling PGE also takes the following argument(s):|Argument| Type |  Description | Default||---|---|---|---|| reflectance_dataset| file |L2A reflectance dataset granule URL| -|| frcover_dataset| file |L2B fractional cover granule URL| -|
-| veg_cover| config | Minimum vegetation cover to apply algorith (0.0-1.0)| 0.5|
-| crid| config | Composite release identifier| 000|
+### References
+
+- Wang, Z., Chlus, A., Geygan, R., Ye, Z., Zheng, T., Singh, A., Couture, J.J., Cavender‐Bares, J., Kruger, E.L. and Townsend, P.A., 2020. Foliar functional traits from imaging spectroscopy across biomes in eastern North America. New Phytologist, 228(2), pp.494-511.
+
+## PGE ArgumentsIn addition to required MAAP job submission arguments the L2B trait estimate PGE also takes the following argument(s):|Argument| Type |  Description | Default||---|---|---|---|| reflectance_dataset| file |L2A reflectance dataset| -|| frcover_dataset| file |L2B fractional cover dataset| -|
+| veg_cover| config | Minimum vegetation cover to apply algorithm (0.0-1.0)| 0.5|
+| crid| config | Composite release identifier| '000'|
 ## OutputsThe outputs of the L2B vegetation trait estimate PGE use the following naming convention:
 
     SISTER_<SENSOR>_L2B_VEGBIOCHEM_<YYYYMMDDTHHMMSS>_<CRID>_<SUBPRODUCT>|Product description| Units |Example filename ||---|---|---|
