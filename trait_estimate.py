@@ -59,7 +59,7 @@ def main():
 
     _ = ray.get([a.set_mask.remote(veg_mask,'veg') for a,b in zip(actors,models)])
 
-    _ = ray.get([a.do.remote(apply_trait_model,[json_file,crid]) for a,json_file in zip(actors,models)])
+    _ = ray.get([a.do.remote(apply_trait_model,[json_file,crid,disclaimer]) for a,json_file in zip(actors,models)])
 
     ray.shutdown()
 
@@ -146,7 +146,7 @@ def apply_trait_model(hy_obj,args):
 
     '''
 
-    json_file,crid =args
+    json_file,crid,disclaimer =args
 
     with open(json_file, 'r') as json_obj:
         trait_model = json.load(json_obj)
@@ -234,7 +234,7 @@ def apply_trait_model(hy_obj,args):
 
     tiff.SetGeoTransform(in_file.GetGeoTransform())
     tiff.SetProjection(in_file.GetProjection())
-    tiff.SetMetadataItem("DESCRIPTION","L2B VEGETATION BIOCHEMISTRY %s" % trait_model["full_name"].upper() )
+    tiff.SetMetadataItem("DESCRIPTION",f"{disclaimer}L2B VEGETATION BIOCHEMISTRY %s" % trait_model["full_name"].upper())
 
     # Write bands to file
     for i,band_name in enumerate(band_names,start=1):
@@ -256,7 +256,7 @@ def apply_trait_model(hy_obj,args):
                       trait_met,
                       {'product': 'VEGBIOCHEM',
                       'processing_level': 'L2B',
-                      'description' : trait_model["full_name"],
+                      'description' : disclaimer + trait_model["full_name"],
                        })
 
 
