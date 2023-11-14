@@ -20,19 +20,17 @@ inputs:
     - name: reflectance_dataset
       description:
       required: True
-
     - name: frcov_dataset
       description:
       required: True
-
-
   config:
     - name: veg_cover
       data_type: number
       default: '0.5'
       description: Minimum vegetation cover threshold
-
     - name: crid
       data_type:
       default: '000'
       description: Composite release identifier
+    - name: experimental
+      default: "True"

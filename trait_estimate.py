@@ -19,6 +19,12 @@ def main():
     with open(run_config_json, 'r') as in_file:
         run_config =json.load(in_file)
 
+    experimental = run_config['inputs']['experimental']
+    if experimental:
+        disclaimer = "(DISCLAIMER: THIS DATA IS EXPERIMENTAL AND NOT INTENDED FOR SCIENTIFIC USE) "
+    else:
+        disclaimer = ""
+
     os.mkdir('output')
     os.mkdir('temp')
 
@@ -77,7 +83,8 @@ def main():
         rgb = (rgb-np.nanmin(rgb,axis=(0,1)))/(np.nanmax(rgb,axis= (0,1))-np.nanmin(rgb,axis= (0,1)))
         rgb = (rgb*255).astype(np.uint8)
         im = Image.fromarray(rgb)
-        description = 'Vegetation biochemistry RGB quicklook. R: Nitrogen, G: Chlorophyll, B: Leaf Mass per Area'
+        description = f'{disclaimer}Vegetation biochemistry RGB quicklook. R: Nitrogen, G: Chlorophyll, B: Leaf Mass ' \
+                      f'per Area'
 
     else:
 
@@ -98,7 +105,7 @@ def main():
         qlook[band_arr == -9999] = 0
 
         im = Image.fromarray(qlook, 'RGB')
-        description = 'Vegetation biochemistry quicklook. Chlorophyll'
+        description = f'{disclaimer}Vegetation biochemistry quicklook. Chlorophyll'
 
     im.save(qlook_file)
 
@@ -112,8 +119,15 @@ def main():
     shutil.copyfile(run_config_json,
                     qlook_file.replace('.png','.runconfig.json'))
 
-    shutil.copyfile('run.log',
-                    qlook_file.replace('.png','.log'))
+    if os.path.exists("run.log"):
+        shutil.copyfile('run.log',
+                        qlook_file.replace('.png','.log'))
+
+    # If experimental, prefix filenames with "EXPERIMENTAL-"
+    if experimental:
+        for file in glob.glob(f"output/SISTER*"):
+            shutil.move(file, f"output/EXPERIMENTAL-{os.path.basename(file)}")
+
 
 def generate_metadata(in_file,out_file,metadata):
 
