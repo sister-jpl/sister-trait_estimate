@@ -1,3 +1,4 @@
+import datetime as dt
 import glob
 import json
 import os
@@ -9,6 +10,8 @@ from osgeo import gdal
 import hytools as ht
 from PIL import Image
 import matplotlib.pyplot as plt
+import pystac
+
 
 def main():
 
@@ -109,36 +112,120 @@ def main():
 
     im.save(qlook_file)
 
-    generate_metadata(rfl_met,
-                      qlook_met,
-                      {'product': 'VEGBIOCHEM',
-                      'processing_level': 'L2B',
-                      'description' : description,
-                       })
-
-    shutil.copyfile(run_config_json,
-                    qlook_file.replace('.png','.runconfig.json'))
+    shutil.copyfile(run_config_json, qlook_file.replace('.png','.runconfig.json'))
 
     if os.path.exists("run.log"):
-        shutil.copyfile('run.log',
-                        qlook_file.replace('.png','.log'))
+        shutil.copyfile('run.log', qlook_file.replace('.png', '.log'))
 
     # If experimental, prefix filenames with "EXPERIMENTAL-"
     if experimental:
         for file in glob.glob(f"output/SISTER*"):
             shutil.move(file, f"output/EXPERIMENTAL-{os.path.basename(file)}")
 
+    # Update the path variables if now experimental
+    log_path = glob.glob("output/*%s.log" % run_config['inputs']['crid'])[0]
+    out_runconfig_path = log_path.replace(".log", ".runconfig.json")
+    vegbiochem_basename = os.path.basename(log_path)[:-4]
 
-def generate_metadata(in_file,out_file,metadata):
+    # Generate STAC
+    catalog = pystac.Catalog(id=vegbiochem_basename,
+                             description=f'{disclaimer}This catalog contains the output data products of the SISTER '
+                                         f'trait estimate PGE, including chlorophyll, nitrogen, and leaf mass per area '
+                                         f'products in cloud-optimized GeoTIFF format. Execution artifacts including '
+                                         f'the runconfig file and execution log file are also included.')
 
-    with open(in_file, 'r') as in_obj:
-        in_met =json.load(in_obj)
+    # Add an item for the top level to hold runconfig and log
+    description = f"{disclaimer}Vegetation biochemistry RGB quicklook. R: Nitrogen, G: Chlorophyll, B: Leaf Mass per " \
+                  f"Area"
+    metadata = generate_stac_metadata(vegbiochem_basename, None, description, run_config["metadata"])
+    assets = {
+        "runconfig": f"./{os.path.basename(out_runconfig_path)}",
+        "browse": f"./{vegbiochem_basename}.log",
+    }
+    if os.path.exists(log_path):
+        assets["log"] = f"./{os.path.basename(log_path)}"
+    item = create_item(metadata, assets)
+    catalog.add_item(item)
 
-    for key,value in metadata.items():
-        in_met[key] = value
+    # Add items for data products
+    tif_files = glob.glob("output/*SISTER*.tif")
+    tif_files.sort()
+    model_jsons = []
+    for model in models:
+        with open(model, "r") as f:
+            model_jsons.append(json.load(f))
+    for tif_file in tif_files:
+        tif_basename = os.path.basename(tif_file)[:-4]
+        trait = tif_basename[-3:]
+        description = get_description_from_trait(trait, model_jsons)
+        if description is None:
+            description = ""
+        metadata = generate_stac_metadata(tif_basename, trait, description, run_config["metadata"])
+        assets = {
+            "cog": f"./{os.path.basename(tif_file)}",
+        }
+        item = create_item(metadata, assets)
+        catalog.add_item(item)
 
-    with open(out_file, 'w') as out_obj:
-        json.dump(in_met,out_obj,indent=3)
+    # set catalog hrefs
+    catalog.normalize_hrefs(f"./output/{vegbiochem_basename}")
+
+    # save the catalog
+    catalog.describe()
+    catalog.save(catalog_type=pystac.CatalogType.SELF_CONTAINED)
+    print("Catalog HREF: ", catalog.get_self_href())
+
+    # Move the assets from the output directory to the stac item directories
+    for item in catalog.get_items():
+        for asset in item.assets.values():
+            fname = os.path.basename(asset.href)
+            shutil.move(f"output/{fname}", f"output/{vegbiochem_basename}/{item.id}/{fname}")
+
+
+def get_description_from_trait(trait, model_jsons):
+    for model in model_jsons:
+        if trait == model["short_name"]:
+            return model["full_name"]
+    return None
+
+
+def generate_stac_metadata(basename, trait, description, in_meta):
+
+    out_meta = {}
+    out_meta['id'] = basename
+    out_meta['start_datetime'] = dt.datetime.strptime(in_meta['start_time'], "%Y-%m-%dT%H:%M:%SZ")
+    out_meta['end_datetime'] = dt.datetime.strptime(in_meta['end_time'], "%Y-%m-%dT%H:%M:%SZ")
+    # Split corner coordinates string into list
+    geometry = in_meta['bounding_box']
+    # Add first coord to the end of the list to close the polygon
+    geometry.append(geometry[0])
+    out_meta['geometry'] = geometry
+    product = basename.split('_')[3]
+    if trait is not None:
+        product += f"_{trait}"
+    out_meta['properties'] = {
+        'sensor': in_meta['sensor'],
+        'description': description,
+        'product': product,
+        'processing_level': basename.split('_')[2]
+    }
+    return out_meta
+
+
+def create_item(metadata, assets):
+    item = pystac.Item(
+        id=metadata['id'],
+        datetime=metadata['start_datetime'],
+        start_datetime=metadata['start_datetime'],
+        end_datetime=metadata['end_datetime'],
+        geometry=metadata['geometry'],
+        bbox=None,
+        properties=metadata['properties']
+    )
+    # Add assets
+    for key, href in assets.items():
+        item.add_asset(key=key, asset=pystac.Asset(href=href))
+    return item
 
 
 def apply_trait_model(hy_obj,args):
@@ -248,16 +335,6 @@ def apply_trait_model(hy_obj,args):
 
     os.system(f"gdaladdo -minsize 900 {temp_file}")
     os.system(f"gdal_translate {temp_file} {out_file} -co COMPRESS=LZW -co TILED=YES -co COPY_SRC_OVERVIEWS=YES")
-
-    rfl_met = hy_obj.file_name.replace('.bin','.met.json')
-    trait_met =out_file.replace('.tif','.met.json')
-
-    generate_metadata(rfl_met,
-                      trait_met,
-                      {'product': 'VEGBIOCHEM',
-                      'processing_level': 'L2B',
-                      'description' : disclaimer + trait_model["full_name"],
-                       })
 
 
 if __name__== "__main__":
