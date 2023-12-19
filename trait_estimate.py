@@ -28,6 +28,8 @@ def main():
     else:
         disclaimer = ""
 
+    run_config_meta = run_config["metadata"]
+
     os.mkdir('output')
     os.mkdir('temp')
 
@@ -137,10 +139,10 @@ def main():
     # Add an item for the top level to hold runconfig and log
     description = f"{disclaimer}Vegetation biochemistry RGB quicklook. R: Nitrogen, G: Chlorophyll, B: Leaf Mass per " \
                   f"Area"
-    metadata = generate_stac_metadata(vegbiochem_basename, None, description, run_config["metadata"])
+    metadata = generate_stac_metadata(vegbiochem_basename, None, description, run_config_meta)
     assets = {
         "runconfig": f"./{os.path.basename(out_runconfig_path)}",
-        "browse": f"./{vegbiochem_basename}.log",
+        "browse": f"./{vegbiochem_basename}.png",
     }
     if os.path.exists(log_path):
         assets["log"] = f"./{os.path.basename(log_path)}"
@@ -160,7 +162,7 @@ def main():
         description = get_description_from_trait(trait, model_jsons)
         if description is None:
             description = ""
-        metadata = generate_stac_metadata(tif_basename, trait, description, run_config["metadata"])
+        metadata = generate_stac_metadata(tif_basename, trait, description, run_config_meta)
         assets = {
             "cog": f"./{os.path.basename(tif_file)}",
         }
