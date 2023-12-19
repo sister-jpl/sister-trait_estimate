@@ -123,8 +123,8 @@ def main():
             shutil.move(file, f"output/EXPERIMENTAL-{os.path.basename(file)}")
 
     # Update the path variables if now experimental
-    log_path = glob.glob("output/*%s.log" % run_config['inputs']['crid'])[0]
-    out_runconfig_path = log_path.replace(".log", ".runconfig.json")
+    out_runconfig_path = glob.glob("output/*%s.runconfig.json" % run_config['inputs']['crid'])[0]
+    log_path = out_runconfig_path.replace(".runconfig.json", ".log")
     vegbiochem_basename = os.path.basename(log_path)[:-4]
 
     # Generate STAC
