@@ -160,7 +160,7 @@ def main():
         description = get_description_from_trait(trait, model_jsons)
         if description is None:
             description = ""
-        metadata = generate_stac_metadata(tif_basename, trait, description, run_config["metadata"])
+        metadata = generate_stac_metadata(tif_basename, trait, f"{disclaimer}{description}", run_config["metadata"])
         assets = {
             "cog": f"./{os.path.basename(tif_file)}",
         }
@@ -184,7 +184,7 @@ def main():
 
 def get_description_from_trait(trait, model_jsons):
     for model in model_jsons:
-        if trait == model["short_name"]:
+        if trait == model["short_name"].upper():
             return model["full_name"]
     return None
 
