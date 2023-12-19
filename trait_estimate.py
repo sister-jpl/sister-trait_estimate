@@ -28,8 +28,6 @@ def main():
     else:
         disclaimer = ""
 
-    run_config_meta = run_config["metadata"]
-
     os.mkdir('output')
     os.mkdir('temp')
 
@@ -139,7 +137,7 @@ def main():
     # Add an item for the top level to hold runconfig and log
     description = f"{disclaimer}Vegetation biochemistry RGB quicklook. R: Nitrogen, G: Chlorophyll, B: Leaf Mass per " \
                   f"Area"
-    metadata = generate_stac_metadata(vegbiochem_basename, None, description, run_config_meta)
+    metadata = generate_stac_metadata(vegbiochem_basename, None, description, run_config["metadata"])
     assets = {
         "runconfig": f"./{os.path.basename(out_runconfig_path)}",
         "browse": f"./{vegbiochem_basename}.png",
@@ -162,7 +160,7 @@ def main():
         description = get_description_from_trait(trait, model_jsons)
         if description is None:
             description = ""
-        metadata = generate_stac_metadata(tif_basename, trait, description, run_config_meta)
+        metadata = generate_stac_metadata(tif_basename, trait, description, run_config["metadata"])
         assets = {
             "cog": f"./{os.path.basename(tif_file)}",
         }
@@ -198,7 +196,7 @@ def generate_stac_metadata(basename, trait, description, in_meta):
     out_meta['start_datetime'] = dt.datetime.strptime(in_meta['start_time'], "%Y-%m-%dT%H:%M:%SZ")
     out_meta['end_datetime'] = dt.datetime.strptime(in_meta['end_time'], "%Y-%m-%dT%H:%M:%SZ")
     # Split corner coordinates string into list
-    geometry = in_meta['bounding_box']
+    geometry = in_meta['bounding_box'].copy()
     # Add first coord to the end of the list to close the polygon
     geometry.append(geometry[0])
     out_meta['geometry'] = geometry
