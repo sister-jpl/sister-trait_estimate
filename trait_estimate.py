@@ -36,10 +36,10 @@ def main():
     rfl_base_name = os.path.basename(run_config['inputs']['reflectance_dataset'])
     sister,sensor,level,product,datetime,in_crid = rfl_base_name.split('_')
 
-    rfl_file = f'input/{rfl_base_name}/{rfl_base_name}.bin'
+    rfl_file = f'{run_config["inputs"]["reflectance_dataset"]}/{rfl_base_name}.bin'
     rfl_met = rfl_file.replace('.bin','.met.json')
     fc_base_name = os.path.basename(run_config['inputs']['frcov_dataset'])
-    fc_file = f'input/{fc_base_name}/{fc_base_name}.tif'
+    fc_file = f'{run_config["inputs"]["frcov_dataset"]}/{fc_base_name}.tif'
 
     qlook_file = f'output/SISTER_{sensor}_L2B_VEGBIOCHEM_{datetime}_{crid}.png'
     qlook_met = qlook_file.replace('.png','.met.json')
@@ -175,11 +175,13 @@ def main():
     catalog.save(catalog_type=pystac.CatalogType.SELF_CONTAINED)
     print("Catalog HREF: ", catalog.get_self_href())
 
-    # Move the assets from the output directory to the stac item directories
+    # Move the assets from the output directory to the stac item directories and create empty .met.json files
     for item in catalog.get_items():
         for asset in item.assets.values():
             fname = os.path.basename(asset.href)
             shutil.move(f"output/{fname}", f"output/{vegbiochem_basename}/{item.id}/{fname}")
+        with open(f"output/{vegbiochem_basename}/{item.id}/{item.id}.met.json", mode="w"):
+            pass
 
 
 def get_description_from_trait(trait, model_jsons):
@@ -196,14 +198,16 @@ def generate_stac_metadata(basename, trait, description, in_meta):
     out_meta['start_datetime'] = dt.datetime.strptime(in_meta['start_datetime'], "%Y-%m-%dT%H:%M:%SZ")
     out_meta['end_datetime'] = dt.datetime.strptime(in_meta['end_datetime'], "%Y-%m-%dT%H:%M:%SZ")
     out_meta['geometry'] = in_meta['geometry']
-    product = basename.split('_')[3]
+    base_tokens = basename.split('_')
+    out_meta['collection'] = f"SISTER_{base_tokens[1]}_{base_tokens[2]}_{base_tokens[3]}_{base_tokens[5]}"
+    product = base_tokens[3]
     if trait is not None:
         product += f"_{trait}"
     out_meta['properties'] = {
         'sensor': in_meta['sensor'],
         'description': description,
         'product': product,
-        'processing_level': basename.split('_')[2]
+        'processing_level': base_tokens[2]
     }
     return out_meta
 
@@ -215,6 +219,7 @@ def create_item(metadata, assets):
         start_datetime=metadata['start_datetime'],
         end_datetime=metadata['end_datetime'],
         geometry=metadata['geometry'],
+        collection=metadata['collection'],
         bbox=None,
         properties=metadata['properties']
     )
