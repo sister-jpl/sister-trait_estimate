@@ -1,5 +1,6 @@
 import datetime as dt
 import glob
+import logging
 import json
 import os
 import sys
@@ -14,6 +15,17 @@ import pystac
 
 
 def main():
+
+    # Set up console logging using root logger
+    logging.basicConfig(format="%(asctime)s %(levelname)s: %(message)s", level=logging.INFO)
+    logger = logging.getLogger("sister-trait-estimate")
+    # Set up file handler logging
+    handler = logging.FileHandler("pge_run.log")
+    handler.setLevel(logging.INFO)
+    formatter = logging.Formatter("%(asctime)s %(levelname)s [%(module)s]: %(message)s")
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    logger.info("Starting trait_estimate.py")
 
     pge_path = os.path.dirname(os.path.realpath(__file__))
 
@@ -54,9 +66,11 @@ def main():
     actors = [HyTools.remote() for rfl_file in models]
 
     # Load data
+    logger.info("Loading data")
     _ = ray.get([a.read_file.remote(rfl_file,'envi') for a,b in zip(actors,models)])
 
     # Set fractional cover mask
+    logger.info("Setting fractional cover mask")
     fc_obj = gdal.Open(fc_file)
     veg_mask = fc_obj.GetRasterBand(2).ReadAsArray() >= run_config['inputs']['veg_cover']
 
@@ -114,8 +128,8 @@ def main():
 
     shutil.copyfile(run_config_json, qlook_file.replace('.png','.runconfig.json'))
 
-    if os.path.exists("run.log"):
-        shutil.copyfile('run.log', qlook_file.replace('.png', '.log'))
+    if os.path.exists("pge_run.log"):
+        shutil.copyfile('pge_run.log', qlook_file.replace('.png', '.log'))
 
     # If experimental, prefix filenames with "EXPERIMENTAL-"
     if experimental:
