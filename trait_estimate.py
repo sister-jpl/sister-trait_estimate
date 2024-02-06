@@ -1,4 +1,6 @@
+import datetime as dt
 import glob
+import logging
 import json
 import os
 import sys
@@ -9,8 +11,21 @@ from osgeo import gdal
 import hytools as ht
 from PIL import Image
 import matplotlib.pyplot as plt
+import pystac
+
 
 def main():
+
+    # Set up console logging using root logger
+    logging.basicConfig(format="%(asctime)s %(levelname)s: %(message)s", level=logging.INFO)
+    logger = logging.getLogger("sister-trait-estimate")
+    # Set up file handler logging
+    handler = logging.FileHandler("pge_run.log")
+    handler.setLevel(logging.INFO)
+    formatter = logging.Formatter("%(asctime)s %(levelname)s [%(module)s]: %(message)s")
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    logger.info("Starting trait_estimate.py")
 
     pge_path = os.path.dirname(os.path.realpath(__file__))
 
@@ -18,6 +33,12 @@ def main():
 
     with open(run_config_json, 'r') as in_file:
         run_config =json.load(in_file)
+
+    experimental = run_config['inputs']['experimental']
+    if experimental:
+        disclaimer = "(DISCLAIMER: THIS DATA IS EXPERIMENTAL AND NOT INTENDED FOR SCIENTIFIC USE) "
+    else:
+        disclaimer = ""
 
     os.mkdir('output')
     os.mkdir('temp')
@@ -27,10 +48,10 @@ def main():
     rfl_base_name = os.path.basename(run_config['inputs']['reflectance_dataset'])
     sister,sensor,level,product,datetime,in_crid = rfl_base_name.split('_')
 
-    rfl_file = f'input/{rfl_base_name}/{rfl_base_name}.bin'
+    rfl_file = f'{run_config["inputs"]["reflectance_dataset"]}/{rfl_base_name}.bin'
     rfl_met = rfl_file.replace('.bin','.met.json')
     fc_base_name = os.path.basename(run_config['inputs']['frcov_dataset'])
-    fc_file = f'input/{fc_base_name}/{fc_base_name}.tif'
+    fc_file = f'{run_config["inputs"]["frcov_dataset"]}/{fc_base_name}.tif'
 
     qlook_file = f'output/SISTER_{sensor}_L2B_VEGBIOCHEM_{datetime}_{crid}.png'
     qlook_met = qlook_file.replace('.png','.met.json')
@@ -45,15 +66,17 @@ def main():
     actors = [HyTools.remote() for rfl_file in models]
 
     # Load data
+    logger.info("Loading data")
     _ = ray.get([a.read_file.remote(rfl_file,'envi') for a,b in zip(actors,models)])
 
     # Set fractional cover mask
+    logger.info("Setting fractional cover mask")
     fc_obj = gdal.Open(fc_file)
     veg_mask = fc_obj.GetRasterBand(2).ReadAsArray() >= float(run_config['inputs']['veg_cover'])
 
     _ = ray.get([a.set_mask.remote(veg_mask,'veg') for a,b in zip(actors,models)])
 
-    _ = ray.get([a.do.remote(apply_trait_model,[json_file,crid]) for a,json_file in zip(actors,models)])
+    _ = ray.get([a.do.remote(apply_trait_model,[json_file,crid,disclaimer]) for a,json_file in zip(actors,models)])
 
     ray.shutdown()
 
@@ -77,7 +100,8 @@ def main():
         rgb = (rgb-np.nanmin(rgb,axis=(0,1)))/(np.nanmax(rgb,axis= (0,1))-np.nanmin(rgb,axis= (0,1)))
         rgb = (rgb*255).astype(np.uint8)
         im = Image.fromarray(rgb)
-        description = 'Vegetation biochemistry RGB quicklook. R: Nitrogen, G: Chlorophyll, B: Leaf Mass per Area'
+        description = f'{disclaimer}Vegetation biochemistry RGB quicklook. R: Nitrogen, G: Chlorophyll, B: Leaf Mass ' \
+                      f'per Area'
 
     else:
 
@@ -98,33 +122,125 @@ def main():
         qlook[band_arr == -9999] = 0
 
         im = Image.fromarray(qlook, 'RGB')
-        description = 'Vegetation biochemistry quicklook. Chlorophyll'
+        description = f'{disclaimer}Vegetation biochemistry quicklook. Chlorophyll'
 
     im.save(qlook_file)
 
-    generate_metadata(rfl_met,
-                      qlook_met,
-                      {'product': 'VEGBIOCHEM',
-                      'processing_level': 'L2B',
-                      'description' : description,
-                       })
+    shutil.copyfile(run_config_json, qlook_file.replace('.png','.runconfig.json'))
 
-    shutil.copyfile(run_config_json,
-                    qlook_file.replace('.png','.runconfig.json'))
+    if os.path.exists("pge_run.log"):
+        shutil.copyfile('pge_run.log', qlook_file.replace('.png', '.log'))
 
-    shutil.copyfile('run.log',
-                    qlook_file.replace('.png','.log'))
+    # If experimental, prefix filenames with "EXPERIMENTAL-"
+    if experimental:
+        for file in glob.glob(f"output/SISTER*"):
+            shutil.move(file, f"output/EXPERIMENTAL-{os.path.basename(file)}")
 
-def generate_metadata(in_file,out_file,metadata):
+    # Update the path variables if now experimental
+    out_runconfig_path = glob.glob("output/*%s.runconfig.json" % run_config['inputs']['crid'])[0]
+    log_path = out_runconfig_path.replace(".runconfig.json", ".log")
+    vegbiochem_basename = os.path.basename(log_path)[:-4]
 
-    with open(in_file, 'r') as in_obj:
-        in_met =json.load(in_obj)
+    # Generate STAC
+    catalog = pystac.Catalog(id=vegbiochem_basename,
+                             description=f'{disclaimer}This catalog contains the output data products of the SISTER '
+                                         f'trait estimate PGE, including chlorophyll, nitrogen, and leaf mass per area '
+                                         f'products in cloud-optimized GeoTIFF format. Execution artifacts including '
+                                         f'the runconfig file and execution log file are also included.')
 
-    for key,value in metadata.items():
-        in_met[key] = value
+    # Add an item for the top level to hold runconfig and log
+    description = f"{disclaimer}Vegetation biochemistry RGB quicklook. R: Nitrogen, G: Chlorophyll, B: Leaf Mass per " \
+                  f"Area"
+    metadata = generate_stac_metadata(vegbiochem_basename, None, description, run_config["metadata"])
+    assets = {
+        "runconfig": f"./{os.path.basename(out_runconfig_path)}",
+        "browse": f"./{vegbiochem_basename}.png",
+    }
+    if os.path.exists(log_path):
+        assets["log"] = f"./{os.path.basename(log_path)}"
+    item = create_item(metadata, assets)
+    catalog.add_item(item)
 
-    with open(out_file, 'w') as out_obj:
-        json.dump(in_met,out_obj,indent=3)
+    # Add items for data products
+    tif_files = glob.glob("output/*SISTER*.tif")
+    tif_files.sort()
+    model_jsons = []
+    for model in models:
+        with open(model, "r") as f:
+            model_jsons.append(json.load(f))
+    for tif_file in tif_files:
+        tif_basename = os.path.basename(tif_file)[:-4]
+        trait = tif_basename[-3:]
+        description = get_description_from_trait(trait, model_jsons)
+        if description is None:
+            description = ""
+        metadata = generate_stac_metadata(tif_basename, trait, f"{disclaimer}{description}", run_config["metadata"])
+        assets = {
+            "cog": f"./{os.path.basename(tif_file)}",
+        }
+        item = create_item(metadata, assets)
+        catalog.add_item(item)
+
+    # set catalog hrefs
+    catalog.normalize_hrefs(f"./output/{vegbiochem_basename}")
+
+    # save the catalog
+    catalog.describe()
+    catalog.save(catalog_type=pystac.CatalogType.SELF_CONTAINED)
+    print("Catalog HREF: ", catalog.get_self_href())
+
+    # Move the assets from the output directory to the stac item directories and create empty .met.json files
+    for item in catalog.get_items():
+        for asset in item.assets.values():
+            fname = os.path.basename(asset.href)
+            shutil.move(f"output/{fname}", f"output/{vegbiochem_basename}/{item.id}/{fname}")
+        with open(f"output/{vegbiochem_basename}/{item.id}/{item.id}.met.json", mode="w"):
+            pass
+
+
+def get_description_from_trait(trait, model_jsons):
+    for model in model_jsons:
+        if trait == model["short_name"].upper():
+            return model["full_name"]
+    return None
+
+
+def generate_stac_metadata(basename, trait, description, in_meta):
+
+    out_meta = {}
+    out_meta['id'] = basename
+    out_meta['start_datetime'] = dt.datetime.strptime(in_meta['start_datetime'], "%Y-%m-%dT%H:%M:%SZ")
+    out_meta['end_datetime'] = dt.datetime.strptime(in_meta['end_datetime'], "%Y-%m-%dT%H:%M:%SZ")
+    out_meta['geometry'] = in_meta['geometry']
+    base_tokens = basename.split('_')
+    out_meta['collection'] = f"SISTER_{base_tokens[1]}_{base_tokens[2]}_{base_tokens[3]}_{base_tokens[5]}"
+    product = base_tokens[3]
+    if trait is not None:
+        product += f"_{trait}"
+    out_meta['properties'] = {
+        'sensor': in_meta['sensor'],
+        'description': description,
+        'product': product,
+        'processing_level': base_tokens[2]
+    }
+    return out_meta
+
+
+def create_item(metadata, assets):
+    item = pystac.Item(
+        id=metadata['id'],
+        datetime=metadata['start_datetime'],
+        start_datetime=metadata['start_datetime'],
+        end_datetime=metadata['end_datetime'],
+        geometry=metadata['geometry'],
+        collection=metadata['collection'],
+        bbox=None,
+        properties=metadata['properties']
+    )
+    # Add assets
+    for key, href in assets.items():
+        item.add_asset(key=key, asset=pystac.Asset(href=href))
+    return item
 
 
 def apply_trait_model(hy_obj,args):
@@ -132,7 +248,7 @@ def apply_trait_model(hy_obj,args):
 
     '''
 
-    json_file,crid =args
+    json_file,crid,disclaimer =args
 
     with open(json_file, 'r') as json_obj:
         trait_model = json.load(json_obj)
@@ -220,7 +336,7 @@ def apply_trait_model(hy_obj,args):
 
     tiff.SetGeoTransform(in_file.GetGeoTransform())
     tiff.SetProjection(in_file.GetProjection())
-    tiff.SetMetadataItem("DESCRIPTION","L2B VEGETATION BIOCHEMISTRY %s" % trait_model["full_name"].upper() )
+    tiff.SetMetadataItem("DESCRIPTION",f"{disclaimer}L2B VEGETATION BIOCHEMISTRY %s" % trait_model["full_name"].upper())
 
     # Write bands to file
     for i,band_name in enumerate(band_names,start=1):
@@ -234,16 +350,6 @@ def apply_trait_model(hy_obj,args):
 
     os.system(f"gdaladdo -minsize 900 {temp_file}")
     os.system(f"gdal_translate {temp_file} {out_file} -co COMPRESS=LZW -co TILED=YES -co COPY_SRC_OVERVIEWS=YES")
-
-    rfl_met = hy_obj.file_name.replace('.bin','.met.json')
-    trait_met =out_file.replace('.tif','.met.json')
-
-    generate_metadata(rfl_met,
-                      trait_met,
-                      {'product': 'VEGBIOCHEM',
-                      'processing_level': 'L2B',
-                      'description' : trait_model["full_name"],
-                       })
 
 
 if __name__== "__main__":
